@@ -1,7 +1,0 @@
--keep class com.dexterous.** { *; }
--keepattributes Signature
--keepattributes *Annotation*
--keepattributes EnclosingMethod
--keepattributes InnerClasses
--keep class com.google.gson.** { *; }
--keep class sun.misc.Unsafe { *; }
