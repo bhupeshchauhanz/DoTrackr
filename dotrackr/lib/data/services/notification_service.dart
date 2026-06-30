@@ -209,4 +209,45 @@ class NotificationService {
       matchDateTimeComponents: DateTimeComponents.time,
     );
   }
+  Future<void> scheduleBirthdayNotifications(DateTime dob, String name) async {
+    if (!_isInitialized) await init();
+    if (!await hasPermission()) return;
+    
+    final id12am = 888888;
+    final id12pm = 888889;
+
+    cancel(id12am);
+    cancel(id12pm);
+
+    final now = tz.TZDateTime.now(tz.local);
+    var nextBirthday = tz.TZDateTime(tz.local, now.year, dob.month, dob.day);
+    if (nextBirthday.isBefore(now) && !(now.month == dob.month && now.day == dob.day)) {
+      nextBirthday = tz.TZDateTime(tz.local, now.year + 1, dob.month, dob.day);
+    }
+
+    var date12am = tz.TZDateTime(tz.local, nextBirthday.year, nextBirthday.month, nextBirthday.day, 0, 1);
+    var date12pm = tz.TZDateTime(tz.local, nextBirthday.year, nextBirthday.month, nextBirthday.day, 12, 0);
+    
+    if (date12am.isBefore(now)) date12am = date12am.add(const Duration(days: 365));
+    if (date12pm.isBefore(now)) date12pm = date12pm.add(const Duration(days: 365));
+
+    final title = 'Happy Birthday $name! 🎉🎂';
+    final body = 'Wishing you a fantastic day filled with joy and success! Have a wonderful year ahead. 😊';
+
+    await _plugin.zonedSchedule(
+      id12am, title, body, date12am,
+      NotificationDetails(android: _details()),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime,
+    );
+
+    await _plugin.zonedSchedule(
+      id12pm, title, body, date12pm,
+      NotificationDetails(android: _details()),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime,
+    );
+  }
 }

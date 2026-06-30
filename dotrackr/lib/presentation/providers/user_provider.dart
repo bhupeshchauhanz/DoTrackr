@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/user_model.dart';
 import '../../data/services/database_service.dart';
-
+import '../../data/services/notification_service.dart';
 final userProvider = StateNotifierProvider<UserNotifier, UserModel?>((ref) {
   return UserNotifier();
 });
@@ -70,6 +70,10 @@ class UserNotifier extends StateNotifier<UserModel?> {
       }
       
       state = user;
+
+      if (user.dateOfBirth != null && user.firstName != null) {
+        await NotificationService().scheduleBirthdayNotifications(user.dateOfBirth!, user.firstName!);
+      }
     } catch (e) {
       rethrow;
     }

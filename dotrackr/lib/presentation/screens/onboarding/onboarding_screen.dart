@@ -623,11 +623,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       );
       return;
     }
-    if (_currentPage == 2 && _firstNameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name')),
-      );
-      return;
+    if (_currentPage == 2) {
+      if (_firstNameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter your first name')),
+        );
+        return;
+      }
+      if (_fullNameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter your full name')),
+        );
+        return;
+      }
     }
     if (_currentPage == 3 && _emailController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -640,6 +648,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         const SnackBar(content: Text('Please enter a valid email address')),
       );
       return;
+    }
+
+    if (_currentPage == 3 && _ageController.text.isNotEmpty) {
+      final age = int.tryParse(_ageController.text);
+      if (age != null && age > 130) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Age > 130? 🧛‍♂️ Are you a vampire? Max age is 130, mazak mat karo! 😂')),
+        );
+        return;
+      }
     }
 
     if (_currentPage < 4) {

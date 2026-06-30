@@ -165,7 +165,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _buildEditableField('Full Name', _fullNameController),
                 _buildEditableField('Email', _emailController),
                 _buildDateOfBirthPicker(),
-                _buildEditableField('Age', _ageController, keyboardType: TextInputType.number),
+                _buildInfoField('Age (Auto-calculated)', _ageController.text.isNotEmpty ? _ageController.text : 'Not set'),
                 _buildEditableField('Address', _addressController),
                 _buildEditableField('Instagram', _instaController),
                 
@@ -258,7 +258,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           lastDate: DateTime.now(),
         );
         if (picked != null) {
-          setState(() => _dateOfBirth = picked);
+          setState(() {
+            _dateOfBirth = picked;
+            final now = DateTime.now();
+            int calcAge = now.year - picked.year;
+            if (now.month < picked.month || (now.month == picked.month && now.day < picked.day)) {
+              calcAge--;
+            }
+            _ageController.text = calcAge.toString();
+          });
         }
       },
       child: Container(
@@ -312,15 +320,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     final ageText = _ageController.text.trim();
-    if (ageText.isNotEmpty) {
-      final age = int.tryParse(ageText);
-      if (age == null || age < 1 || age > 150) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a valid age (1-150)')),
-        );
-        return;
-      }
-    }
 
     setState(() => _isLoading = true);
     try {
