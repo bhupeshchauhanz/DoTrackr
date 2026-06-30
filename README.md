@@ -132,6 +132,6 @@ This project is licensed under the **MIT License** — see [LICENSE](./LICENSE) 
 
 ## Author
 
-**Bhupesh** — [@bhupesh](https://linkedin.com/in/bhupesh)
+**Bhupesh** — [@bhupesh](https://linkedin.com/in/bhupeshchauhanz)
 
 > Built with ❤️ using Flutter
