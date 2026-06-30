@@ -25,8 +25,12 @@ class HabitModelAdapter extends TypeAdapter<HabitModel> {
       timesPerDay: fields[5] as int,
       reminderHour: fields[6] as int?,
       reminderMinute: fields[7] as int?,
+      reminderTimes: (fields[12] as List).cast<String>(),
       colorValue: fields[8] as int,
       iconName: fields[9] as String,
+      durationMinutes: fields[13] as int,
+      durationScope: fields[14] as String,
+      reminderScope: fields[15] as String,
       createdAt: fields[10] as DateTime?,
       updatedAt: fields[11] as DateTime?,
     );
@@ -35,7 +39,7 @@ class HabitModelAdapter extends TypeAdapter<HabitModel> {
   @override
   void write(BinaryWriter writer, HabitModel obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -52,6 +56,8 @@ class HabitModelAdapter extends TypeAdapter<HabitModel> {
       ..write(obj.reminderHour)
       ..writeByte(7)
       ..write(obj.reminderMinute)
+      ..writeByte(12)
+      ..write(obj.reminderTimes)
       ..writeByte(8)
       ..write(obj.colorValue)
       ..writeByte(9)
@@ -59,7 +65,13 @@ class HabitModelAdapter extends TypeAdapter<HabitModel> {
       ..writeByte(10)
       ..write(obj.createdAt)
       ..writeByte(11)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(13)
+      ..write(obj.durationMinutes)
+      ..writeByte(14)
+      ..write(obj.durationScope)
+      ..writeByte(15)
+      ..write(obj.reminderScope);
   }
 
   @override

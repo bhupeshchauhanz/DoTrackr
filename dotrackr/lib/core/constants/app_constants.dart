@@ -10,6 +10,7 @@ class AppConstants {
   static const String habitLogBoxName = 'habit_logs';
   static const String categoryBoxName = 'categories';
   static const String settingsBoxName = 'settings';
+  static const String userBoxName = 'users';
 
   static const List<String> weekDays = [
     'Mon',

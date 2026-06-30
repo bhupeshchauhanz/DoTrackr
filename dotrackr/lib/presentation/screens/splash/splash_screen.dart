@@ -89,47 +89,27 @@ class _SplashScreenState extends State<SplashScreen>
                   children: [
                     const Spacer(flex: 2),
                     
-                    // Logo container
+                    // App logo
                     Container(
                       width: logoSize,
                       height: logoSize,
                       decoration: BoxDecoration(
-                        color: Colors.transparent,
+                        shape: BoxShape.circle,
+                        color: Colors.white,
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Circular background
-                          Container(
-                            width: logoSize,
-                            height: logoSize,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.textPrimary,
-                                width: 3,
-                              ),
-                            ),
-                          ),
-                          // Inner circle
-                          Container(
-                            width: logoSize - 8,
-                            height: logoSize - 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.textPrimary,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                          // Checkmark
-                          Icon(
+                      clipBehavior: Clip.antiAlias,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/icon/app_icon.jpg',
+                          width: logoSize,
+                          height: logoSize,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Icon(
                             Icons.check,
                             color: AppColors.textPrimary,
                             size: checkMarkSize,
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     

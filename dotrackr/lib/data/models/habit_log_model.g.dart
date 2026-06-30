@@ -22,13 +22,14 @@ class HabitLogModelAdapter extends TypeAdapter<HabitLogModel> {
       completedAt: fields[2] as DateTime,
       note: fields[3] as String?,
       count: fields[4] as int,
+      durationSeconds: fields[5] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, HabitLogModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -38,7 +39,9 @@ class HabitLogModelAdapter extends TypeAdapter<HabitLogModel> {
       ..writeByte(3)
       ..write(obj.note)
       ..writeByte(4)
-      ..write(obj.count);
+      ..write(obj.count)
+      ..writeByte(5)
+      ..write(obj.durationSeconds);
   }
 
   @override

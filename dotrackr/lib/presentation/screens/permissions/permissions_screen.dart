@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../providers/user_provider.dart';
 
-class PermissionsScreen extends StatefulWidget {
+class PermissionsScreen extends ConsumerStatefulWidget {
   final VoidCallback onComplete;
 
   const PermissionsScreen({super.key, required this.onComplete});
 
   @override
-  State<PermissionsScreen> createState() => _PermissionsScreenState();
+  ConsumerState<PermissionsScreen> createState() => _PermissionsScreenState();
 }
 
-class _PermissionsScreenState extends State<PermissionsScreen> {
+class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   bool _notificationsGranted = false;
-  bool _alarmGranted = false;
 
   @override
   void initState() {
@@ -25,15 +26,15 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   Future<void> _checkPermissions() async {
     try {
       final notifyStatus = await Permission.notification.status;
-      final alarmStatus = await Permission.scheduleExactAlarm.status;
 
       if (mounted) {
         setState(() {
           _notificationsGranted = notifyStatus.isGranted;
-          _alarmGranted = alarmStatus.isGranted || alarmStatus.isLimited;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to check permissions: $e');
+    }
   }
 
   @override
@@ -44,16 +45,18 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(isSmall ? 20 : 32),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: isSmall ? 20 : 32, vertical: 24),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Skip button
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: widget.onComplete,
+                    onPressed: () => _handleComplete(false),
                     child: Text(
                       'Skip',
                       style: GoogleFonts.inter(
@@ -64,9 +67,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   ),
                 ],
               ),
-
-              const Spacer(),
-
+              const SizedBox(height: 12),
               // Icon
               Container(
                 width: isSmall ? 80 : 100,
@@ -82,9 +83,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-
-              const SizedBox(height: 32),
-
+              const SizedBox(height: 24),
               Text(
                 'Enable Permissions',
                 style: GoogleFonts.inter(
@@ -94,9 +93,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-
-              const SizedBox(height: 16),
-
+              const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
@@ -108,9 +105,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
-
-              const SizedBox(height: 40),
-
+              const SizedBox(height: 32),
               // Notification permission
               _buildPermissionCard(
                 icon: Icons.notifications_outlined,
@@ -119,25 +114,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                 isGranted: _notificationsGranted,
                 onRequest: _requestNotificationPermission,
               ),
-
-              const SizedBox(height: 12),
-
-              // Exact alarm permission
-              _buildPermissionCard(
-                icon: Icons.alarm,
-                title: 'Exact Alarms',
-                description: 'Ring at the precise time you set',
-                isGranted: _alarmGranted,
-                onRequest: _requestAlarmPermission,
-              ),
-
-              const Spacer(),
-
+              const SizedBox(height: 32),
               // Continue button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: widget.onComplete,
+                  onPressed: () => _handleComplete(true),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: AppColors.textPrimary,
@@ -155,9 +137,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Text(
                 'You can change permissions anytime in Settings',
                 style: GoogleFonts.inter(
@@ -166,6 +146,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -251,23 +232,22 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       if (mounted) {
         setState(() => _notificationsGranted = status.isGranted);
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to request notification permission: $e')),
+        );
+      }
+    }
   }
 
-  Future<void> _requestAlarmPermission() async {
+
+  Future<void> _handleComplete(bool granted) async {
     try {
-      final status = await Permission.scheduleExactAlarm.request();
-      if (mounted) {
-        setState(() => _alarmGranted = status.isGranted || status.isLimited);
-      }
-      // On some devices exact alarm opens system settings; re-check on return
-      if (!status.isGranted) {
-        await Future.delayed(const Duration(seconds: 1));
-        final recheck = await Permission.scheduleExactAlarm.status;
-        if (mounted) {
-          setState(() => _alarmGranted = recheck.isGranted || recheck.isLimited);
-        }
-      }
-    } catch (_) {}
+      await ref.read(userProvider.notifier).setPermissionsGranted(granted);
+    } catch (e) {
+      debugPrint('Failed to save permission state: $e');
+    }
+    widget.onComplete();
   }
 }

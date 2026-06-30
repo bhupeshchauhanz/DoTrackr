@@ -5,11 +5,10 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/todo_model.dart';
 import '../../providers/providers.dart';
-import '../../../data/services/permission_service.dart';
+import '../../../data/services/notification_service.dart';
 
 class AddTodoScreen extends ConsumerStatefulWidget {
   final TodoModel? todo;
-
   const AddTodoScreen({super.key, this.todo});
 
   @override
@@ -20,7 +19,8 @@ class _AddTodoScreenState extends ConsumerState<AddTodoScreen> {
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
   DateTime? _dueDate;
-  TimeOfDay? _reminderTime;
+  TimeOfDay? _deadlineTime;
+  List<TimeOfDay> _reminderTimes = [];
   Priority _priority = Priority.medium;
   bool _isLoading = false;
 
@@ -30,17 +30,24 @@ class _AddTodoScreenState extends ConsumerState<AddTodoScreen> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.todo?.title ?? '');
-    _descriptionController = TextEditingController(text: widget.todo?.description ?? '');
-
+    _descriptionController =
+        TextEditingController(text: widget.todo?.description ?? '');
     if (widget.todo != null) {
       _dueDate = widget.todo!.dueDate;
       if (widget.todo!.hasDueTime) {
-        _reminderTime = TimeOfDay(
-          hour: widget.todo!.dueTimeHour!,
-          minute: widget.todo!.dueTimeMinute!,
-        );
+        _deadlineTime = TimeOfDay(
+            hour: widget.todo!.dueTimeHour!,
+            minute: widget.todo!.dueTimeMinute!);
       }
       _priority = widget.todo!.priority;
+      // Load saved reminder times
+      if (widget.todo!.reminderTimes.isNotEmpty) {
+        _reminderTimes = widget.todo!.reminderTimes.map((t) {
+          final parts = t.split(':');
+          return TimeOfDay(
+              hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        }).toList();
+      }
     }
   }
 
@@ -53,9 +60,6 @@ class _AddTodoScreenState extends ConsumerState<AddTodoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenHeight < 700;
-
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
       resizeToAvoidBottomInset: true,
@@ -76,292 +80,79 @@ class _AddTodoScreenState extends ConsumerState<AddTodoScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Title
-              Text(
-                'Title',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+              _label('Title'),
               const SizedBox(height: 8),
-              TextField(
-                controller: _titleController,
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  color: AppColors.textPrimary,
-                ),
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: 'What needs to be done?',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: AppColors.textPrimary,
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-              
+              _textField(_titleController, 'What needs to be done?', fontSize: 18),
               const SizedBox(height: 24),
-              
+
               // Description
-              Text(
-                'Description (optional)',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+              _label('Description (optional)'),
               const SizedBox(height: 8),
-              TextField(
-                controller: _descriptionController,
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                ),
-                maxLines: 3,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: 'Add some details...',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: AppColors.textPrimary,
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-              
+              _textField(_descriptionController, 'Add some details...', maxLines: 3),
               const SizedBox(height: 24),
-              
-              // Reminder Time - OPTIONAL
-              Text(
-                'Reminder Time (optional)',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _selectReminderTime,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.access_time, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _reminderTime != null
-                              ? _reminderTime!.format(context)
-                              : 'Select reminder time',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: _reminderTime != null
-                                ? AppColors.textPrimary
-                                : AppColors.textTertiary,
-                          ),
-                        ),
-                      ),
-                      if (_reminderTime != null)
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _reminderTime = null;
-                            });
-                          },
-                          child: const Icon(Icons.close, size: 20),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Due Date - OPTIONAL with Today button
+
+              // ─── DEADLINE SECTION ───
               Row(
                 children: [
-                  Text(
-                    'Due Date (optional)',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
+                  _label('Deadline'),
                   const Spacer(),
-                  TextButton(
-                    onPressed: _selectToday,
-                    style: TextButton.styleFrom(
-                      backgroundColor: AppColors.success.withValues(alpha: 0.15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      'Today',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ),
+                  _todayButton(),
                 ],
               ),
               const SizedBox(height: 8),
-              GestureDetector(
+              // Due Date
+              _datePickerTile(
+                icon: Icons.calendar_today,
+                text: _dueDate != null
+                    ? DateFormat('EEE, MMM d, yyyy').format(_dueDate!)
+                    : 'Select date',
+                hasValue: _dueDate != null,
                 onTap: _selectDueDate,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _dueDate != null
-                              ? DateFormat('MMM d, yyyy').format(_dueDate!)
-                              : 'Select due date',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: _dueDate != null
-                                ? AppColors.textPrimary
-                                : AppColors.textTertiary,
-                          ),
-                        ),
-                      ),
-                      if (_dueDate != null)
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _dueDate = null;
-                            });
-                          },
-                          child: const Icon(Icons.close, size: 20),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Priority
-              Text(
-                'Priority',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
-                ),
+                onClear: () => setState(() {
+                  _dueDate = null;
+                  _deadlineTime = null;
+                }),
               ),
               const SizedBox(height: 8),
-              Row(
-                children: Priority.values.map((priority) {
-                  final isSelected = _priority == priority;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _priority = priority;
-                        });
-                      },
-                      child: Container(
-                        margin: EdgeInsets.only(
-                          right: priority != Priority.urgent ? 8 : 0,
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? _getPriorityColor(priority)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected
-                                ? _getPriorityColor(priority)
-                                : AppColors.border,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: _getPriorityColor(priority),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _getPriorityLabel(priority),
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: isSelected
-                                    ? AppColors.textPrimary
-                                    : AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+              // Deadline Time
+              _datePickerTile(
+                icon: Icons.schedule,
+                text: _deadlineTime != null
+                    ? 'Due by ${_deadlineTime!.format(context)}'
+                    : 'Set deadline time (optional)',
+                hasValue: _deadlineTime != null,
+                onTap: _selectDeadlineTime,
+                onClear: () => setState(() => _deadlineTime = null),
               ),
-              
+              const SizedBox(height: 24),
+
+              // ─── REMINDERS SECTION (separate from deadline) ───
+              _label('Reminders (alarm will ring)'),
+              const SizedBox(height: 4),
+              Text(
+                'Set times to get reminded. Can be before or after deadline.',
+                style: GoogleFonts.inter(fontSize: 11, color: AppColors.textTertiary),
+              ),
+              const SizedBox(height: 8),
+              ..._reminderTimes.asMap().entries.map((entry) {
+                final i = entry.key;
+                final rt = entry.value;
+                return _reminderTile(i, rt);
+              }),
+              _addReminderButton(),
+              const SizedBox(height: 24),
+
+              // ─── PRIORITY ───
+              _label('Priority'),
+              const SizedBox(height: 8),
+              _priorityRow(),
               const SizedBox(height: 40),
-              
+
               // Save Button
               SizedBox(
                 width: double.infinity,
@@ -373,23 +164,12 @@ class _AddTodoScreenState extends ConsumerState<AddTodoScreen> {
                     foregroundColor: AppColors.backgroundPrimary,
                   ),
                   child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : Text(
-                          _isEditing ? 'Update Todo' : 'Create Todo',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(_isEditing ? 'Update Todo' : 'Create Todo',
+                          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),
-              
               SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
             ],
           ),
@@ -398,173 +178,341 @@ class _AddTodoScreenState extends ConsumerState<AddTodoScreen> {
     );
   }
 
-  Color _getPriorityColor(Priority priority) {
-    switch (priority) {
-      case Priority.low:
-        return AppColors.priorityLow;
-      case Priority.medium:
-        return AppColors.priorityMedium;
-      case Priority.high:
-        return AppColors.priorityHigh;
-      case Priority.urgent:
-        return AppColors.priorityUrgent;
-    }
+  // ─── UI HELPERS ───
+
+  Widget _label(String text) => Text(text,
+      style: GoogleFonts.inter(
+          fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textSecondary));
+
+  Widget _textField(TextEditingController ctrl, String hint,
+      {double fontSize = 16, int maxLines = 1}) {
+    return TextField(
+      controller: ctrl,
+      style: GoogleFonts.inter(fontSize: fontSize, color: AppColors.textPrimary),
+      maxLines: maxLines,
+      textCapitalization: TextCapitalization.sentences,
+      decoration: InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.textPrimary, width: 2)),
+      ),
+    );
   }
 
-  String _getPriorityLabel(Priority priority) {
-    switch (priority) {
-      case Priority.low:
-        return 'Low';
-      case Priority.medium:
-        return 'Medium';
-      case Priority.high:
-        return 'High';
-      case Priority.urgent:
-        return 'Urgent';
-    }
+  Widget _todayButton() {
+    return GestureDetector(
+      onTap: () => setState(() => _dueDate = DateTime.now()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text('Today',
+            style: GoogleFonts.inter(
+                fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success)),
+      ),
+    );
   }
 
-  void _selectToday() {
-    setState(() {
-      _dueDate = DateTime.now();
-    });
+  Widget _datePickerTile({
+    required IconData icon,
+    required String text,
+    required bool hasValue,
+    required VoidCallback onTap,
+    required VoidCallback onClear,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: AppColors.textSecondary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(text,
+                  style: GoogleFonts.inter(
+                      fontSize: 15,
+                      color: hasValue ? AppColors.textPrimary : AppColors.textTertiary)),
+            ),
+            if (hasValue)
+              GestureDetector(
+                onTap: onClear,
+                child: const Icon(Icons.close, size: 18, color: AppColors.textTertiary),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
-  Future<void> _selectReminderTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _reminderTime ?? TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.textPrimary,
-              surface: AppColors.backgroundSecondary,
+  Widget _reminderTile(int index, TimeOfDay time) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () => _editReminderTime(index),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.alarm, size: 20, color: AppColors.warning),
+              const SizedBox(width: 12),
+              Text('Alarm ${index + 1}: ${time.format(context)}',
+                  style: GoogleFonts.inter(fontSize: 15, color: AppColors.textPrimary)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _reminderTimes.removeAt(index)),
+                child: const Icon(Icons.close, size: 18, color: AppColors.textTertiary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _addReminderButton() {
+    return GestureDetector(
+      onTap: _addReminderTime,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.add_alarm, size: 20, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              _reminderTimes.isEmpty ? 'Add Alarm Reminder' : 'Add Another Alarm',
+              style: GoogleFonts.inter(fontSize: 15, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _priorityRow() {
+    return Row(
+      children: Priority.values.map((p) {
+        final isSelected = _priority == p;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _priority = p),
+            child: Container(
+              margin: EdgeInsets.only(right: p != Priority.urgent ? 8 : 0),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: isSelected ? _priorityColor(p) : AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isSelected ? _priorityColor(p) : AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  Container(width: 8, height: 8,
+                      decoration: BoxDecoration(color: _priorityColor(p), shape: BoxShape.circle)),
+                  const SizedBox(height: 4),
+                  Text(_priorityLabel(p),
+                      style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500,
+                          color: isSelected ? AppColors.textPrimary : AppColors.textSecondary)),
+                ],
+              ),
             ),
           ),
-          child: child!,
         );
-      },
+      }).toList(),
     );
-    if (picked != null) {
-      setState(() {
-        _reminderTime = picked;
-      });
+  }
+
+  Color _priorityColor(Priority p) {
+    switch (p) {
+      case Priority.low: return AppColors.priorityLow;
+      case Priority.medium: return AppColors.priorityMedium;
+      case Priority.high: return AppColors.priorityHigh;
+      case Priority.urgent: return AppColors.priorityUrgent;
     }
   }
+
+  String _priorityLabel(Priority p) {
+    switch (p) {
+      case Priority.low: return 'Low';
+      case Priority.medium: return 'Medium';
+      case Priority.high: return 'High';
+      case Priority.urgent: return 'Urgent';
+    }
+  }
+
+  // ─── ACTIONS ───
 
   Future<void> _selectDueDate() async {
+    final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.textPrimary,
-              surface: AppColors.backgroundSecondary,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      initialDate: _dueDate ?? now,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365 * 5)),
+      builder: _darkPickerBuilder,
+    );
+    if (picked != null) setState(() => _dueDate = picked);
+  }
+
+  Future<void> _selectDeadlineTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _deadlineTime ?? TimeOfDay.now(),
+      builder: _darkPickerBuilder,
+    );
+    if (picked != null) setState(() => _deadlineTime = picked);
+  }
+
+  Future<void> _addReminderTime() async {
+    if (_reminderTimes.length >= 5) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Maximum 5 reminders allowed')));
+      }
+      return;
+    }
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: _darkPickerBuilder,
     );
     if (picked != null) {
-      setState(() {
-        _dueDate = picked;
-      });
+      if (_reminderTimes.any((t) => t.hour == picked.hour && t.minute == picked.minute)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('This time is already added')));
+        }
+        return;
+      }
+      setState(() => _reminderTimes.add(picked));
     }
+  }
+
+  Future<void> _editReminderTime(int index) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _reminderTimes[index],
+      builder: _darkPickerBuilder,
+    );
+    if (picked != null) {
+      if (_reminderTimes.asMap().entries.any((e) =>
+          e.key != index && e.value.hour == picked.hour && e.value.minute == picked.minute)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('This time is already added')));
+        }
+        return;
+      }
+      setState(() => _reminderTimes[index] = picked);
+    }
+  }
+
+  Widget _darkPickerBuilder(BuildContext context, Widget? child) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: const ColorScheme.dark(
+          primary: AppColors.textPrimary,
+          surface: AppColors.backgroundSecondary,
+        ),
+      ),
+      child: child!,
+    );
   }
 
   Future<void> _saveTodo() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a title')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Please enter a title')));
       return;
     }
-
-
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
-      // Request notification permission if needed
-      await PermissionService().requestNotificationPermission();
+      if (_reminderTimes.isNotEmpty) {
+        await NotificationService().requestPermission();
+      }
+
+      final reminderTimesStr = _reminderTimes
+          .map((t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}')
+          .toList();
 
       if (_isEditing) {
         final updated = widget.todo!.copyWith(
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+              ? null : _descriptionController.text.trim(),
           dueDate: _dueDate,
-          dueTimeHour: _reminderTime?.hour,
-          dueTimeMinute: _reminderTime?.minute,
+          dueTimeHour: _deadlineTime?.hour,
+          dueTimeMinute: _deadlineTime?.minute,
           priority: _priority,
+          reminderTimes: reminderTimesStr,
         );
         await ref.read(todosProvider.notifier).updateTodo(updated);
       } else {
         await ref.read(todosProvider.notifier).addTodo(
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+              ? null : _descriptionController.text.trim(),
           dueDate: _dueDate,
-          dueTimeHour: _reminderTime?.hour,
-          dueTimeMinute: _reminderTime?.minute,
+          dueTimeHour: _deadlineTime?.hour,
+          dueTimeMinute: _deadlineTime?.minute,
           priority: _priority,
+          reminderTimes: reminderTimesStr,
         );
       }
 
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _deleteTodo() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete Todo'),
         content: const Text('Are you sure you want to delete this todo?'),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete', style: TextStyle(color: AppColors.error))),
         ],
       ),
     );
-
     if (confirmed == true) {
       await ref.read(todosProvider.notifier).deleteTodo(widget.todo!.id);
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     }
   }
 }

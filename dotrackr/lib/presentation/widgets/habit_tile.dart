@@ -9,6 +9,7 @@ class HabitTile extends StatelessWidget {
   final bool isCompletedToday;
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
+  final VoidCallback? onStartTimer;
 
   const HabitTile({
     super.key,
@@ -17,6 +18,7 @@ class HabitTile extends StatelessWidget {
     required this.isCompletedToday,
     this.onTap,
     this.onComplete,
+    this.onStartTimer,
   });
 
   IconData _getIcon() {
@@ -106,31 +108,65 @@ class HabitTile extends StatelessWidget {
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: onComplete,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isCompletedToday
-                      ? AppColors.success.withValues(alpha: 0.2)
-                      : AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
+            Padding(
+              padding: const EdgeInsets.all(6),
+              child: GestureDetector(
+                onTap: onComplete,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
                     color: isCompletedToday
-                        ? AppColors.success
-                        : AppColors.border,
+                        ? AppColors.success.withValues(alpha: 0.2)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isCompletedToday
+                          ? AppColors.success
+                          : AppColors.textTertiary,
+                      width: isCompletedToday ? 0 : 2,
+                    ),
                   ),
-                ),
-                child: Icon(
-                  isCompletedToday ? Icons.check : Icons.add,
-                  size: 18,
-                  color: isCompletedToday
-                      ? AppColors.success
-                      : AppColors.textTertiary,
+                  child: isCompletedToday
+                      ? const Icon(Icons.check, size: 18, color: AppColors.success)
+                      : null,
                 ),
               ),
             ),
+            // Timer start button for habits with duration
+            if (habit.hasTimer && !isCompletedToday && onStartTimer != null) ...[
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: GestureDetector(
+                  onTap: onStartTimer,
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.play_arrow, size: 16, color: AppColors.warning),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${habit.durationMinutes}m',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

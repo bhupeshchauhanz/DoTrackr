@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../providers/user_provider.dart';
 
@@ -486,33 +487,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   color: AppColors.border,
                   width: 2,
                 ),
-                image: _profileImage != null
-                    ? DecorationImage(
-                        image: FileImage(_profileImage!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
               ),
-              child: _profileImage == null
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.camera_alt_outlined,
-                          size: isSmallScreen ? 36 : 48,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap to add photo',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    )
-                  : null,
+              child: ClipOval(
+                child: _profileImage != null
+                    ? Image.file(
+                        _profileImage!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildAddPhotoPlaceholder(isSmallScreen),
+                      )
+                    : _buildAddPhotoPlaceholder(isSmallScreen),
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -610,6 +595,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
+  Widget _buildAddPhotoPlaceholder(bool isSmallScreen) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.camera_alt_outlined,
+          size: isSmallScreen ? 36 : 48,
+          color: AppColors.textTertiary,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Tap to add photo',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: AppColors.textTertiary,
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _nextPage() async {
     if (_currentPage == 1 && _selectedPronoun == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -620,6 +626,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_currentPage == 2 && _firstNameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your name')),
+      );
+      return;
+    }
+    if (_currentPage == 3 && _emailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email is required to continue')),
+      );
+      return;
+    }
+    if (_currentPage == 3 && !_isValidEmail(_emailController.text.trim())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email address')),
       );
       return;
     }
@@ -634,19 +652,40 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
+  bool _isValidEmail(String email) {
+    if (email.length > 254) return false;
+    final parts = email.split('@');
+    if (parts.length != 2) return false;
+    final local = parts[0];
+    final domain = parts[1];
+    if (local.isEmpty || local.length > 64) return false;
+    if (domain.isEmpty || domain.length > 254) return false;
+    if (!domain.contains('.')) return false;
+    final domainRegex = RegExp(r'^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$');
+    return domainRegex.hasMatch(domain);
+  }
+
   Future<void> _saveAndContinue() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
+      String? savedImagePath;
+      if (_profileImage != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final savedFile = await _profileImage!.copy('${appDir.path}/$fileName');
+        savedImagePath = savedFile.path;
+      }
+
       await ref.read(userProvider.notifier).saveUser(
         pronoun: _selectedPronoun,
         firstName: _firstNameController.text.trim(),
         fullName: _fullNameController.text.trim(),
         age: int.tryParse(_ageController.text),
         email: _emailController.text.trim(),
-        profileImagePath: _profileImage?.path,
+        profileImagePath: savedImagePath,
         isOnboardingComplete: true,
         joinedAt: DateTime.now(),
       );

@@ -34,6 +34,9 @@ class HabitModel extends HiveObject {
   @HiveField(7)
   int? reminderMinute;
 
+  @HiveField(12)
+  List<String> reminderTimes; // "HH:MM" strings for multiple reminders
+
   @HiveField(8)
   int colorValue;
 
@@ -46,6 +49,15 @@ class HabitModel extends HiveObject {
   @HiveField(11)
   DateTime updatedAt;
 
+  @HiveField(13)
+  int durationMinutes; // target duration in minutes (0 = no timer)
+
+  @HiveField(14)
+  String durationScope; // 'today' = apply only today, 'all' = apply from today onwards
+
+  @HiveField(15)
+  String reminderScope; // 'today' = apply only today, 'all' = apply from today onwards
+
   HabitModel({
     required this.id,
     required this.name,
@@ -55,8 +67,12 @@ class HabitModel extends HiveObject {
     this.timesPerDay = 1,
     this.reminderHour,
     this.reminderMinute,
+    this.reminderTimes = const [],
     this.colorValue = 0xFFFFFFFF,
     this.iconName = 'check_circle',
+    this.durationMinutes = 0,
+    this.durationScope = 'all',
+    this.reminderScope = 'all',
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -68,7 +84,9 @@ class HabitModel extends HiveObject {
     frequencyIndex = value.index;
   }
 
-  bool get hasReminder => reminderHour != null && reminderMinute != null;
+  bool get hasReminder =>
+      reminderTimes.isNotEmpty ||
+      (reminderHour != null && reminderMinute != null);
 
   bool isScheduledForDay(DateTime date) {
     switch (frequency) {
@@ -83,6 +101,11 @@ class HabitModel extends HiveObject {
     }
   }
 
+  bool get hasTimer => durationMinutes > 0;
+
+  bool get isDurationForTodayOnly => durationScope == 'today';
+  bool get isReminderForTodayOnly => reminderScope == 'today';
+
   HabitModel copyWith({
     String? id,
     String? name,
@@ -92,8 +115,12 @@ class HabitModel extends HiveObject {
     int? timesPerDay,
     Object? reminderHour = _sentinel,
     Object? reminderMinute = _sentinel,
+    List<String>? reminderTimes,
     int? colorValue,
     String? iconName,
+    int? durationMinutes,
+    String? durationScope,
+    String? reminderScope,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -106,8 +133,12 @@ class HabitModel extends HiveObject {
       timesPerDay: timesPerDay ?? this.timesPerDay,
       reminderHour: reminderHour == _sentinel ? this.reminderHour : reminderHour as int?,
       reminderMinute: reminderMinute == _sentinel ? this.reminderMinute : reminderMinute as int?,
+      reminderTimes: reminderTimes ?? this.reminderTimes,
       colorValue: colorValue ?? this.colorValue,
       iconName: iconName ?? this.iconName,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      durationScope: durationScope ?? this.durationScope,
+      reminderScope: reminderScope ?? this.reminderScope,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

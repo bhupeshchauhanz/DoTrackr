@@ -27,6 +27,7 @@ class TodoModelAdapter extends TypeAdapter<TodoModel> {
       categoryId: fields[7] as String?,
       isCompleted: fields[8] as bool,
       completedAt: fields[9] as DateTime?,
+      reminderTimes: (fields[12] as List).cast<String>(),
       createdAt: fields[10] as DateTime?,
       updatedAt: fields[11] as DateTime?,
     );
@@ -35,7 +36,7 @@ class TodoModelAdapter extends TypeAdapter<TodoModel> {
   @override
   void write(BinaryWriter writer, TodoModel obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -59,7 +60,9 @@ class TodoModelAdapter extends TypeAdapter<TodoModel> {
       ..writeByte(10)
       ..write(obj.createdAt)
       ..writeByte(11)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(12)
+      ..write(obj.reminderTimes);
   }
 
   @override

@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../data/services/database_service.dart';
 import '../../providers/providers.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/premium_card.dart';
-import '../../widgets/notification_setup_guide.dart';
 import '../profile/profile_screen.dart';
+import 'about_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -18,23 +20,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  bool _batteryOptimizationExempt = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkBatteryStatus();
-  }
-
-  Future<void> _checkBatteryStatus() async {
-    try {
-      final status = await Permission.ignoreBatteryOptimizations.status;
-      if (mounted) {
-        setState(() => _batteryOptimizationExempt = status.isGranted);
-      }
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
@@ -56,13 +41,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 32),
-
-                // ─────────────────────────────────────────────────────────
-                // FIX NOTIFICATIONS CARD (shows warning if not exempt)
-                // ─────────────────────────────────────────────────────────
-                _buildNotificationFixCard(context),
-
                 const SizedBox(height: 32),
 
                 // ─────────────────────────────────────────────────────────
@@ -127,6 +105,117 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 32),
 
                 // ─────────────────────────────────────────────────────────
+                // System Permissions
+                // ─────────────────────────────────────────────────────────
+                Text(
+                  'System Permissions',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                PremiumCard(
+                  onTap: () async {
+                    final status = await Permission.ignoreBatteryOptimizations.status;
+                    if (status.isDenied) {
+                      await Permission.ignoreBatteryOptimizations.request();
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Battery Optimization is already disabled.')),
+                        );
+                      }
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.battery_saver, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Disable Battery Optimization',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Highly recommended to ensure reminders ring on time',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                PremiumCard(
+                  onTap: () async {
+                    await openAppSettings();
+                  },
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.settings_suggest, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Open App Settings',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Configure notifications & exact alarm permissions',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // ─────────────────────────────────────────────────────────
                 // About
                 // ─────────────────────────────────────────────────────────
                 Text(
@@ -139,7 +228,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 PremiumCard(
-                  onTap: () => _showAboutDialog(context),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
                   child: Row(
                     children: [
                       Container(
@@ -194,6 +283,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+
+                // Clear All Data
                 PremiumCard(
                   onTap: () => _showClearDataDialog(context, ref),
                   child: Row(
@@ -236,31 +327,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 32),
-
-                // ─────────────────────────────────────────────────────────
-                // Preferences
-                // ─────────────────────────────────────────────────────────
-                Text(
-                  'Preferences',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
                 const SizedBox(height: 12),
+
+                // Export Data
                 PremiumCard(
+                  onTap: () => _exportData(context),
                   child: Row(
                     children: [
                       Container(
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
+                          color: AppColors.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
+                        child: const Icon(Icons.upload_outlined, color: AppColors.success),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -268,7 +349,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Notifications',
+                              'Export Data',
                               style: GoogleFonts.inter(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -277,26 +358,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Coming soon',
+                              'Save a backup JSON to Downloads',
                               style: GoogleFonts.inter(
                                 fontSize: 14,
-                                color: AppColors.textTertiary,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ],
                         ),
                       ),
+                      const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Import Data
+                PremiumCard(
+                  onTap: () => _showImportDialog(context, ref),
+                  child: Row(
+                    children: [
                       Container(
                         width: 48,
-                        height: 32,
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(16),
+                          color: AppColors.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Center(
-                          child: Icon(Icons.lock_outline, size: 16, color: AppColors.textTertiary),
+                        child: const Icon(Icons.download_outlined, color: AppColors.warning),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Import Data',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Restore from a backup JSON file',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      const Icon(Icons.chevron_right, color: AppColors.textTertiary),
                     ],
                   ),
                 ),
@@ -310,15 +426,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Container(
                         width: 60,
                         height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: AppColors.border),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
                         ),
-                        child: const Icon(
-                          Icons.check_circle,
-                          color: AppColors.textPrimary,
-                          size: 32,
+                        clipBehavior: Clip.antiAlias,
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/icon/app_icon.jpg',
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.check_circle,
+                              color: AppColors.textPrimary,
+                              size: 32,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -360,180 +484,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Fix Notifications Card
+  // Dialogs & Actions
   // ───────────────────────────────────────────────────────────────────────────
-
-  Widget _buildNotificationFixCard(BuildContext context) {
-    final isFixed = _batteryOptimizationExempt;
-
-    return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => const NotificationGuideSheet(),
-        ).then((_) {
-          // Re-check status after guide is closed
-          Future.delayed(const Duration(milliseconds: 500), _checkBatteryStatus);
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isFixed
-              ? AppColors.success.withValues(alpha: 0.08)
-              : const Color(0xFFFB923C).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isFixed
-                ? AppColors.success.withValues(alpha: 0.4)
-                : const Color(0xFFFB923C).withValues(alpha: 0.6),
-            width: isFixed ? 1 : 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            // Animated icon container
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isFixed
-                    ? AppColors.success.withValues(alpha: 0.15)
-                    : const Color(0xFFFB923C).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(
-                isFixed ? Icons.check_circle_outline : Icons.battery_alert_outlined,
-                color: isFixed ? AppColors.success : const Color(0xFFFB923C),
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        isFixed ? 'Notifications Ready' : 'Fix Notifications',
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      if (!isFixed) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFB923C),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'ACTION NEEDED',
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    isFixed
-                        ? 'Battery optimization is disabled. Alarms will ring on time.'
-                        : 'Battery saver may prevent alarms from ringing. Tap to fix.',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: isFixed ? AppColors.success : AppColors.textSecondary,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: isFixed ? AppColors.success : const Color(0xFFFB923C),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Dialogs
-  // ───────────────────────────────────────────────────────────────────────────
-
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppConstants.appName),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Version ${AppConstants.appVersion}',
-              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'A premium productivity app combining Todo management and Habit tracking with a minimalist design.',
-              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Features:',
-              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            _buildFeatureItem('Task management with priorities'),
-            _buildFeatureItem('Habit tracking with streaks'),
-            _buildFeatureItem('Weekly statistics'),
-            _buildFeatureItem('Dark premium design'),
-            _buildFeatureItem('Personalized dashboard'),
-            _buildFeatureItem('Profile management'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.check, size: 16, color: AppColors.success),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showClearDataDialog(BuildContext context, WidgetRef ref) {
     showDialog(
@@ -570,5 +522,85 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    final path = await DatabaseService().exportData();
+    if (!context.mounted) return;
+    if (path != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Backup saved!\n$path'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Export failed. Please try again.')),
+      );
+    }
+  }
+
+  void _showImportDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Import Data', style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          'This will REPLACE all your current data with the backup.\nCurrent data will be lost.\n\nPick a dotrackr_backup_*.json file.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _pickAndImport(context, ref);
+            },
+            child: Text('Pick File', style: TextStyle(color: AppColors.warning)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAndImport(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.first.path;
+      if (path == null) return;
+
+      final success = await DatabaseService().importData(path);
+      if (!context.mounted) return;
+
+      if (success) {
+        ref.read(todosProvider.notifier).loadTodos();
+        ref.read(habitsProvider.notifier).loadHabits();
+        ref.read(habitLogsProvider.notifier).loadLogs();
+        ref.read(categoriesProvider.notifier).loadCategories();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data restored successfully!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Import failed. Please use a valid DoTrackr backup file.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 }

@@ -47,6 +47,9 @@ class TodoModel extends HiveObject {
   @HiveField(11)
   DateTime updatedAt;
 
+  @HiveField(12)
+  List<String> reminderTimes; // "HH:MM" strings for multiple reminders (separate from deadline)
+
   TodoModel({
     required this.id,
     required this.title,
@@ -58,6 +61,7 @@ class TodoModel extends HiveObject {
     this.categoryId,
     this.isCompleted = false,
     this.completedAt,
+    this.reminderTimes = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -87,7 +91,8 @@ class TodoModel extends HiveObject {
     if (dueDate == null || isCompleted) return false;
     final now = DateTime.now();
     if (hasDueTime) {
-      return dueDateTime!.isBefore(now);
+      final dt = dueDateTime;
+      return dt != null && dt.isBefore(now);
     }
     return dueDate!.isBefore(DateTime(now.year, now.month, now.day));
   }
@@ -103,6 +108,7 @@ class TodoModel extends HiveObject {
     Object? categoryId = _sentinel,
     bool? isCompleted,
     Object? completedAt = _sentinel,
+    List<String>? reminderTimes,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -117,6 +123,7 @@ class TodoModel extends HiveObject {
       categoryId: categoryId == _sentinel ? this.categoryId : categoryId as String?,
       isCompleted: isCompleted ?? this.isCompleted,
       completedAt: completedAt == _sentinel ? this.completedAt : completedAt as DateTime?,
+      reminderTimes: reminderTimes ?? this.reminderTimes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

@@ -194,7 +194,7 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
       case 1:
         return 'All tasks completed';
       case 2:
-        return 'Nothing due today';
+        return 'Nothing for today';
       case 3:
         return 'No upcoming tasks';
       case 4:
@@ -211,7 +211,7 @@ class _TodosScreenState extends ConsumerState<TodosScreen> {
       case 1:
         return 'You\'ve completed all your active tasks';
       case 2:
-        return 'Enjoy your day with no tasks due';
+        return 'No tasks remaining';
       case 3:
         return 'Check back later for upcoming tasks';
       case 4:

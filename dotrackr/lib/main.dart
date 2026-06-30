@@ -1,10 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/database_service.dart';
-import 'data/services/permission_service.dart';
+import 'data/services/notification_service.dart';
 import 'presentation/providers/providers.dart';
 import 'presentation/providers/user_provider.dart';
 import 'presentation/screens/splash/splash_screen.dart';
@@ -16,11 +18,10 @@ import 'presentation/screens/habits/habits_screen.dart';
 import 'presentation/screens/stats/stats_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
 
-void main() {
-  // Call runApp immediately so the framework starts rendering.
-  // All heavy init (Hive, notifications, timezone) happens inside AppWrapper.
-  WidgetsFlutterBinding.ensureInitialized();
 
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -63,22 +64,84 @@ class AppWrapper extends ConsumerStatefulWidget {
   ConsumerState<AppWrapper> createState() => _AppWrapperState();
 }
 
-class _AppWrapperState extends ConsumerState<AppWrapper> {
+class _AppWrapperState extends ConsumerState<AppWrapper> with WidgetsBindingObserver {
   AppStage _stage = AppStage.loading;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialize();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _scheduleDailySummary();
+    }
+  }
+
+  void _scheduleDailySummary() {
+    try {
+      final today = DateTime.now();
+      
+      // Calculate pending todos
+      final todos = ref.read(todosProvider);
+      final pendingTodos = todos.where((t) => !t.isCompleted).length;
+
+      // Calculate pending habits
+      final habits = ref.read(habitsProvider);
+      final habitLogs = ref.read(habitLogsProvider);
+      int pendingHabits = 0;
+      for (final habit in habits) {
+        final hasLogToday = habitLogs.any((log) {
+          return log.habitId == habit.id && 
+                 log.completedAt.year == today.year && 
+                 log.completedAt.month == today.month && 
+                 log.completedAt.day == today.day;
+        });
+        if (!hasLogToday) pendingHabits++;
+      }
+      
+      NotificationService().updateDailySummary(pendingTodos, pendingHabits);
+    } catch (e) {
+      debugPrint('scheduleDailySummary error: $e');
+    }
   }
 
   Future<void> _initialize() async {
     try {
-      // Initialize Hive database
       await DatabaseService().init();
-      // Initialize local notifications + timezone data
-      await PermissionService().init();
+      await NotificationService().init();
+      await ref.read(userProvider.notifier).loadUser();
+
+      final notif = NotificationService();
+      notif.onNotificationTap = _handleNotificationTap;
+
+      // Read native crash log (from MainActivity crash catcher)
+      const platform = MethodChannel('com.dotrackr.crash');
+      try {
+        final String? crashLog = await platform.invokeMethod('getCrashLog');
+        if (crashLog != null && crashLog.isNotEmpty) {
+          debugPrint('NATIVE CRASH LOG:\n$crashLog');
+          if (mounted) {
+            setState(() {
+              _stage = AppStage.error;
+              _errorMessage = 'CRASH TRACE:\n$crashLog';
+            });
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('getCrashLog channel error: $e');
+      }
 
       if (mounted) {
         setState(() {
@@ -92,6 +155,21 @@ class _AppWrapperState extends ConsumerState<AppWrapper> {
           _errorMessage = e.toString();
         });
       }
+    }
+  }
+
+  void _handleNotificationTap(String? rawPayload) {
+    if (rawPayload == null) return;
+    try {
+      final data = jsonDecode(rawPayload) as Map<String, dynamic>;
+      final type = data['type'] as String?;
+      if (type == 'todo') {
+        ref.read(selectedTabProvider.notifier).state = 1;
+      } else if (type == 'habit') {
+        ref.read(selectedTabProvider.notifier).state = 2;
+      }
+    } catch (e) {
+      debugPrint('handleNotificationTap: $e');
     }
   }
 
@@ -120,9 +198,10 @@ class _AppWrapperState extends ConsumerState<AppWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    Widget child;
     switch (_stage) {
       case AppStage.loading:
-        return const Scaffold(
+        child = const Scaffold(
           backgroundColor: Color(0xFF000000),
           body: Center(
             child: CircularProgressIndicator(
@@ -131,9 +210,10 @@ class _AppWrapperState extends ConsumerState<AppWrapper> {
             ),
           ),
         );
+        break;
 
       case AppStage.error:
-        return Scaffold(
+        child = Scaffold(
           backgroundColor: const Color(0xFF000000),
           body: Center(
             child: Padding(
@@ -152,13 +232,17 @@ class _AppWrapperState extends ConsumerState<AppWrapper> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    _errorMessage ?? 'Unknown error',
-                    style: GoogleFonts.inter(
-                      color: Colors.grey,
-                      fontSize: 13,
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Text(
+                        _errorMessage ?? 'Unknown error',
+                        style: GoogleFonts.inter(
+                          color: Colors.grey,
+                          fontSize: 11,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton.icon(
@@ -181,19 +265,26 @@ class _AppWrapperState extends ConsumerState<AppWrapper> {
             ),
           ),
         );
+        break;
 
       case AppStage.splash:
-        return SplashScreen(onComplete: _nextStage);
+        child = SplashScreen(onComplete: _nextStage);
+        break;
 
       case AppStage.onboarding:
-        return OnboardingScreen(onComplete: _nextStage);
+        child = OnboardingScreen(onComplete: _nextStage);
+        break;
 
       case AppStage.permissions:
-        return PermissionsScreen(onComplete: _nextStage);
+        child = PermissionsScreen(onComplete: _nextStage);
+        break;
 
       case AppStage.main:
-        return const MainNavigationScreen();
+        child = const MainNavigationScreen();
+        break;
     }
+
+    return child;
   }
 }
 

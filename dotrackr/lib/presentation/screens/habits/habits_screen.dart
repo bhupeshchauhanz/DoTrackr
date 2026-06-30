@@ -4,11 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../data/models/habit_model.dart';
+import '../../../data/models/habit_log_model.dart';
 import '../../providers/providers.dart';
-import '../../providers/user_provider.dart';
 import '../../widgets/habit_tile.dart';
+import '../../widgets/habit_timer_dialog.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/premium_card.dart';
 import 'add_habit_screen.dart';
 
 class HabitsScreen extends ConsumerStatefulWidget {
@@ -20,41 +21,62 @@ class HabitsScreen extends ConsumerStatefulWidget {
 
 class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   late DateTime _selectedDate;
-  late PageController _calendarController;
-  late ScrollController _horizontalCalendarController;
+  final ScrollController _dateScrollController = ScrollController();
+  bool _hasScrolled = false;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
-    final now = DateTime.now();
-    final monthOffset = (now.year - 2020) * 12 + now.month - 1;
-    _calendarController = PageController(initialPage: monthOffset);
-    // 180 days ago to today. Each item is 48 width + 8 margin = 56.0
-    // We want to start at index 180 (Today)
-    _horizontalCalendarController = ScrollController(initialScrollOffset: 180 * 56.0);
   }
 
   @override
   void dispose() {
-    _calendarController.dispose();
-    _horizontalCalendarController.dispose();
+    _dateScrollController.dispose();
     super.dispose();
+  }
+
+  /// Returns all days in the month including future days
+  List<DateTime> _getDaysInMonth(DateTime date) {
+    final firstDay = DateTime(date.year, date.month, 1);
+    final lastDay = DateTime(date.year, date.month + 1, 0);
+    final days = <DateTime>[];
+    for (int d = firstDay.day; d <= lastDay.day; d++) {
+      days.add(DateTime(date.year, date.month, d));
+    }
+    return days;
   }
 
   @override
   Widget build(BuildContext context) {
     final habits = ref.watch(habitsProvider);
     final now = DateTime.now();
-    final user = ref.watch(userProvider);
-    final joinedAt = user?.joinedAt ?? now;
+    final habitLogs = ref.watch(habitLogsProvider);
 
-    final habitsForSelectedDate = habits.where((h) => h.isScheduledForDay(_selectedDate)).toList();
-    final isSelectedToday = _selectedDate.year == now.year &&
-        _selectedDate.month == now.month &&
-        _selectedDate.day == now.day;
-    final isFutureDate = _selectedDate.isAfter(now);
-    final isBeforeJoinDate = _selectedDate.isBefore(joinedAt);
+    final daysInMonth = _getDaysInMonth(_selectedDate);
+    final habitsForSelectedDate = habits.where((h) {
+      if (!h.isScheduledForDay(_selectedDate)) return false;
+      // Only hide habits created AFTER this date (not scheduled yet)
+      final createdDay = DateTime(
+          h.createdAt.year, h.createdAt.month, h.createdAt.day);
+      final selectedDay = DateTime(
+          _selectedDate.year, _selectedDate.month, _selectedDate.day);
+      if (createdDay.isAfter(selectedDay)) return false;
+      return true;
+    }).toList();
+
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    final selectedOnly = DateTime(
+        _selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final isPastDate = selectedOnly.isBefore(todayOnly);
+    final isFutureDate = selectedOnly.isAfter(todayOnly);
+
+    if (!_hasScrolled) {
+      _hasScrolled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToSelected();
+      });
+    }
 
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
@@ -92,71 +114,23 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  // Date picker row (no Today button)
                   SizedBox(
                     height: 80,
                     child: ListView.builder(
-                      controller: _horizontalCalendarController,
+                      controller: _dateScrollController,
                       scrollDirection: Axis.horizontal,
-                      itemCount: 365,
+                      itemCount: daysInMonth.length,
                       itemBuilder: (context, index) {
-                        final date = DateTime.now().subtract(Duration(days: 180 - index));
-                        return _buildDateChip(date, isSelectedDate(date));
+                        final date = daysInMonth[index];
+                        return _buildDateChip(
+                            date, _isSelectedDate(date), habitLogs);
                       },
                     ),
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: PremiumCard(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      onPressed: () => _navigateMonth(-1),
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                    GestureDetector(
-                      onTap: _showMonthPicker,
-                      child: Column(
-                        children: [
-                          Text(
-                            DateFormat('MMMM yyyy').format(_selectedDate),
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _getSelectedDateLabel(),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _isCurrentMonth()
-                          ? null
-                          : () => _navigateMonth(1),
-                      icon: Icon(
-                        Icons.chevron_right,
-                        color: _isCurrentMonth()
-                            ? AppColors.textTertiary
-                            : AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
             Expanded(
               child: habits.isEmpty
                   ? EmptyState(
@@ -168,116 +142,134 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const AddHabitScreen(),
-                          ),
+                              builder: (_) => const AddHabitScreen()),
                         );
                       },
                     )
-                  : Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: AppColors.success,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Completed',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: AppColors.success,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceElevated,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Pending',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: AppColors.textTertiary,
-                                ),
-                              ),
-                              const Spacer(),
-                              if (isFutureDate || isBeforeJoinDate)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.error.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'Not available',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      color: AppColors.error,
+                  : habitsForSelectedDate.isEmpty
+                      ? EmptyState(
+                          icon: Icons.event_busy,
+                          title: isFutureDate
+                              ? 'Upcoming day'
+                              : 'No habits scheduled',
+                          message: isFutureDate
+                              ? 'No habits are scheduled for this day yet'
+                              : 'No habits were scheduled for this day',
+                        )
+                      : Column(
+                          children: [
+                            // Legend and status
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.success,
+                                      shape: BoxShape.circle,
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            itemCount: habitsForSelectedDate.length,
-                            itemBuilder: (context, index) {
-                              final habit = habitsForSelectedDate[index];
-                              final streak = ref.read(habitLogsProvider.notifier).getStreak(habit);
-                              final isCompleted = _isHabitCompletedOnDate(habit.id);
-                              final canInteract = !isFutureDate && !isBeforeJoinDate;
-
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Opacity(
-                                  opacity: canInteract ? 1.0 : 0.5,
-                                  child: HabitTile(
-                                    habit: habit,
-                                    streak: streak,
-                                    isCompletedToday: isCompleted,
-                                    onComplete: canInteract
-                                        ? () {
-                                            if (!isCompleted) {
-                                              ref
-                                                  .read(habitLogsProvider.notifier)
-                                                  .completeHabit(habitId: habit.id);
-                                            }
-                                          }
-                                        : null,
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => AddHabitScreen(habit: habit),
-                                        ),
-                                      );
-                                    },
+                                  const SizedBox(width: 8),
+                                  Text('Completed',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: AppColors.success)),
+                                  const SizedBox(width: 16),
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.surfaceElevated,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                  const SizedBox(width: 8),
+                                  Text('Pending',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color:
+                                              AppColors.textTertiary)),
+                                  const Spacer(),
+                                  if (isPastDate)
+                                    _buildStatusBadge(
+                                        'Past', AppColors.textTertiary),
+                                  if (isFutureDate)
+                                    _buildStatusBadge(
+                                        'Upcoming', AppColors.priorityMedium),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24),
+                                itemCount:
+                                    habitsForSelectedDate.length,
+                                itemBuilder: (context, index) {
+                                  final habit =
+                                      habitsForSelectedDate[index];
+                                  final streak = ref
+                                      .read(habitLogsProvider.notifier)
+                                      .getStreak(habit);
+                                  final isCompleted =
+                                      _isHabitCompletedOnDate(
+                                          habit.id);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                        bottom: 12),
+                                    child: Opacity(
+                                      opacity:
+                                          (isPastDate || isFutureDate)
+                                              ? 0.6
+                                              : 1.0,
+                                      child: HabitTile(
+                                        habit: habit,
+                                        streak: streak,
+                                        isCompletedToday: isCompleted,
+                                        onComplete:
+                                            (isPastDate || isFutureDate)
+                                                ? null
+                                                : () {
+                                                    if (isCompleted) {
+                                                      _uncompleteHabit(
+                                                          habit.id);
+                                                    } else {
+                                                      ref
+                                                          .read(habitLogsProvider
+                                                              .notifier)
+                                                          .completeHabit(
+                                                              habitId:
+                                                                  habit
+                                                                      .id);
+                                                    }
+                                                  },
+                                        onStartTimer:
+                                            (isPastDate || isFutureDate || !habit.hasTimer)
+                                                ? null
+                                                : () => _startHabitTimer(habit),
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  AddHabitScreen(
+                                                      habit: habit),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
             ),
           ],
         ),
@@ -286,9 +278,7 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const AddHabitScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const AddHabitScreen()),
           );
         },
         child: const Icon(Icons.add),
@@ -296,11 +286,47 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
     );
   }
 
-  Widget _buildDateChip(DateTime date, bool isSelected) {
-    final isToday = date.year == DateTime.now().year &&
-        date.month == DateTime.now().month &&
-        date.day == DateTime.now().day;
-    final habitLogs = ref.watch(habitLogsProvider);
+  Widget _buildStatusBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(fontSize: 10, color: color),
+      ),
+    );
+  }
+
+  void _scrollToSelected() {
+    if (!mounted || !_dateScrollController.hasClients) return;
+    final daysInMonth = _getDaysInMonth(_selectedDate);
+    final selectedIndex = daysInMonth.indexWhere((d) =>
+        d.year == _selectedDate.year &&
+        d.month == _selectedDate.month &&
+        d.day == _selectedDate.day);
+    if (selectedIndex >= 0) {
+      final maxScroll = _dateScrollController.position.maxScrollExtent;
+      final targetOffset = (selectedIndex * 56.0) - 80;
+      final offset =
+          maxScroll > 0 ? targetOffset.clamp(0.0, maxScroll) : 0.0;
+      _dateScrollController.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  Widget _buildDateChip(
+      DateTime date, bool isSelected, List<HabitLogModel> habitLogs) {
+    final now = DateTime.now();
+    final isToday = date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
+    final isFuture = date.isAfter(DateTime(now.year, now.month, now.day));
     final hasLogs = habitLogs.any((log) =>
         log.completedAt.year == date.year &&
         log.completedAt.month == date.month &&
@@ -316,10 +342,18 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
         width: 48,
         margin: const EdgeInsets.only(right: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.textPrimary : AppColors.surface,
+          color: isSelected
+              ? AppColors.textPrimary
+              : isToday
+                  ? AppColors.surfaceElevated
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? AppColors.textPrimary : AppColors.border,
+            color: isSelected
+                ? AppColors.textPrimary
+                : isToday
+                    ? AppColors.textSecondary
+                    : AppColors.border,
           ),
         ),
         child: Column(
@@ -339,10 +373,13 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
               '${date.day}',
               style: GoogleFonts.inter(
                 fontSize: 14,
-                fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.w500,
+                fontWeight:
+                    isToday || isSelected ? FontWeight.bold : FontWeight.w500,
                 color: isSelected
                     ? AppColors.backgroundPrimary
-                    : AppColors.textPrimary,
+                    : isFuture
+                        ? AppColors.textSecondary
+                        : AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 2),
@@ -364,47 +401,10 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
     );
   }
 
-  bool isSelectedDate(DateTime date) {
+  bool _isSelectedDate(DateTime date) {
     return _selectedDate.year == date.year &&
         _selectedDate.month == date.month &&
         _selectedDate.day == date.day;
-  }
-
-  String _getSelectedDateLabel() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final selected = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-    );
-
-    if (selected.isAtSameMomentAs(today)) {
-      return 'Today';
-    } else if (selected.isBefore(today)) {
-      final diff = today.difference(selected).inDays;
-      if (diff == 1) return 'Yesterday';
-      return '$diff days ago';
-    } else {
-      final diff = selected.difference(today).inDays;
-      if (diff == 1) return 'Tomorrow';
-      return 'In $diff days';
-    }
-  }
-
-  bool _isCurrentMonth() {
-    final now = DateTime.now();
-    return _selectedDate.year == now.year && _selectedDate.month == now.month;
-  }
-
-  void _navigateMonth(int delta) {
-    setState(() {
-      _selectedDate = DateTime(
-        _selectedDate.year,
-        _selectedDate.month + delta,
-        _selectedDate.day,
-      );
-    });
   }
 
   void _showMonthPicker() async {
@@ -412,12 +412,16 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDatePickerMode: DatePickerMode.year,
     );
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
+        _hasScrolled = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToSelected();
       });
     }
   }
@@ -429,5 +433,25 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
         log.completedAt.year == _selectedDate.year &&
         log.completedAt.month == _selectedDate.month &&
         log.completedAt.day == _selectedDate.day);
+  }
+
+  Future<void> _uncompleteHabit(String habitId) async {
+    await ref.read(habitLogsProvider.notifier).uncompleteHabit(habitId);
+  }
+
+  Future<void> _startHabitTimer(HabitModel habit) async {
+    final secondsSpent = await Navigator.push<int>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HabitTimerDialog(habit: habit),
+      ),
+    );
+    if (secondsSpent != null && secondsSpent > 0) {
+      // Auto-complete the habit with the time spent
+      await ref.read(habitLogsProvider.notifier).completeHabit(
+        habitId: habit.id,
+        durationSeconds: secondsSpent,
+      );
+    }
   }
 }

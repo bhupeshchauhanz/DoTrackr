@@ -110,19 +110,25 @@ class HomeScreen extends ConsumerWidget {
                               color: AppColors.surface,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: AppColors.border),
-                              image: hasProfileImage
-                                  ? DecorationImage(
-                                      image: FileImage(File(profileImagePath)),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
                             ),
-                            child: hasProfileImage
-                                ? null
-                                : const Icon(
-                                    Icons.person_outline,
-                                    color: AppColors.textPrimary,
-                                  ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(11),
+                              child: hasProfileImage
+                                  ? Image.file(
+                                      File(profileImagePath),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Icon(
+                                          Icons.person_outline,
+                                          color: AppColors.textPrimary,
+                                        );
+                                      },
+                                    )
+                                  : const Icon(
+                                      Icons.person_outline,
+                                      color: AppColors.textPrimary,
+                                    ),
+                            ),
                           ),
                         ),
                       ],
@@ -388,7 +394,11 @@ class HomeScreen extends ConsumerWidget {
                           streak: streak,
                           isCompletedToday: isCompleted,
                           onComplete: () {
-                            ref.read(habitLogsProvider.notifier).completeHabit(habitId: habit.id);
+                            if (isCompleted) {
+                              ref.read(habitLogsProvider.notifier).uncompleteHabit(habit.id);
+                            } else {
+                              ref.read(habitLogsProvider.notifier).completeHabit(habitId: habit.id);
+                            }
                           },
                         ),
                       ),

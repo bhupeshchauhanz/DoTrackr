@@ -17,22 +17,15 @@ class AppDateUtils {
 
   static String formatRelative(DateTime date) {
     final now = DateTime.now();
-    final difference = date.difference(now);
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = target.difference(today).inDays;
 
-    if (difference.inDays == 0) {
-      if (difference.isNegative) {
-        return 'Yesterday';
-      }
-      return 'Today';
-    } else if (difference.inDays == 1) {
-      return 'Tomorrow';
-    } else if (difference.inDays == -1) {
-      return 'Yesterday';
-    } else if (difference.inDays > 1 && difference.inDays < 7) {
-      return DateFormat('EEEE').format(date);
-    } else {
-      return formatDate(date);
-    }
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Tomorrow';
+    if (diff == -1) return 'Yesterday';
+    if (diff > 1 && diff < 7) return DateFormat('EEEE').format(date);
+    return formatDate(date);
   }
 
   static bool isToday(DateTime date) {

@@ -9,11 +9,9 @@ final userProvider = StateNotifierProvider<UserNotifier, UserModel?>((ref) {
 class UserNotifier extends StateNotifier<UserModel?> {
   final DatabaseService _db = DatabaseService();
 
-  UserNotifier() : super(null) {
-    _loadUser();
-  }
+  UserNotifier() : super(null);
 
-  Future<void> _loadUser() async {
+  Future<void> loadUser() async {
     try {
       final box = _db.userBox;
       if (box.isNotEmpty) {

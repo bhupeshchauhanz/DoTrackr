@@ -19,12 +19,16 @@ class HabitLogModel extends HiveObject {
   @HiveField(4)
   int count;
 
+  @HiveField(5)
+  int durationSeconds; // actual time spent in seconds
+
   HabitLogModel({
     required this.id,
     required this.habitId,
     required this.completedAt,
     this.note,
     this.count = 1,
+    this.durationSeconds = 0,
   });
 
   bool isSameDay(DateTime other) {
@@ -39,6 +43,7 @@ class HabitLogModel extends HiveObject {
     DateTime? completedAt,
     String? note,
     int? count,
+    int? durationSeconds,
   }) {
     return HabitLogModel(
       id: id ?? this.id,
@@ -46,6 +51,7 @@ class HabitLogModel extends HiveObject {
       completedAt: completedAt ?? this.completedAt,
       note: note ?? this.note,
       count: count ?? this.count,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
     );
   }
 }
