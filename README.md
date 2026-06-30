@@ -104,7 +104,7 @@ Pre-built APK is available in the root of this repo: [`DoTrackr.apk`](./DoTrackr
 
 ## Screenshots
 
-<img src="assets/shot.png" width="120" alt="DoTrackr App Shot" />
+<img src="assets/Shot.png" width="" alt="DoTrackr App Shot" />
 
 ---
 
